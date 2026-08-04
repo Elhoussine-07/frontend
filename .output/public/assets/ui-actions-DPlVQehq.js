@@ -1,0 +1,1 @@
+import{n as e}from"./dist-BxkmJmVS.js";function t(t){e(t,{description:`Action prête — en attente du branchement API.`})}export{t};

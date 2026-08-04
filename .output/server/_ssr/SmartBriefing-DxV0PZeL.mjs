@@ -1,0 +1,817 @@
+import { r as __toESM } from "../_runtime.mjs";
+import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
+import { t as useAuthStore } from "./auth.store-ntL1qCiT.mjs";
+import { t as ApiError } from "./http-DhyEQgDt.mjs";
+import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
+import { _ as saveProjectDraft, d as getProjectShortlist, h as publishProject, i as createProject, n as contactAgencies, t as EmptyState } from "./EmptyState-tYTEkNIz.mjs";
+import { $ as Check, A as Lock, D as MapPin, E as Menu, H as CreditCard, K as CircleUserRound, L as FileText, M as LayoutGrid, N as Info, _ as Send, d as Star, f as Sparkles, j as LoaderCircle, nt as Calendar, ot as Bot, w as Paperclip, y as Save } from "../_libs/lucide-react.mjs";
+import { n as StackSkeleton } from "./Skeletons-BmbDCxzK.mjs";
+import { g as Link } from "../_libs/@tanstack/react-router+[...].mjs";
+import { n as toast } from "../_libs/sonner.mjs";
+import { t as uiAction } from "./ui-actions-Crijx9Um.mjs";
+import { i as useBriefingStore, n as generateCdcPdf, r as sendBriefingMessage, t as acceptSuggestion } from "./briefing.store-D8lw3Hm4.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/SmartBriefing-DxV0PZeL.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+var BRIEFING_STEPS = [
+	{
+		id: 1,
+		line1: "Catégorie",
+		line2: "du besoin"
+	},
+	{
+		id: 2,
+		line1: "Description",
+		line2: "du besoin"
+	},
+	{
+		id: 3,
+		line1: "Budget",
+		line2: ""
+	},
+	{
+		id: 4,
+		line1: "Localisation",
+		line2: ""
+	},
+	{
+		id: 5,
+		line1: "Délai de",
+		line2: "réalisation"
+	}
+];
+/**
+* Stepper 5 étapes des écrans 04a / 04b.
+* - étape complétée : pastille noire avec coche
+* - étape courante  : pastille noire avec numéro
+* - étape à venir   : pastille bordée avec numéro
+*/
+function BriefingStepper({ currentStep, completedSteps, onStepClick }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ol", {
+		className: "flex items-start",
+		children: BRIEFING_STEPS.map((step, index) => {
+			const isDone = completedSteps.includes(step.id);
+			const isCurrent = currentStep === step.id;
+			return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
+				className: "flex min-w-0 flex-1 flex-col items-center",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex w-full items-center",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: index === 0 ? "h-px flex-1 bg-transparent" : "h-px flex-1 bg-border" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							disabled: !(Boolean(onStepClick) && (isDone || isCurrent)),
+							onClick: () => onStepClick?.(step.id),
+							"aria-current": isCurrent ? "step" : void 0,
+							className: isDone || isCurrent ? "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-[13.5px] font-semibold text-primary-foreground disabled:cursor-default" : "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-[13.5px] font-semibold disabled:cursor-default",
+							children: isDone ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, {
+								className: "h-3.5 w-3.5",
+								strokeWidth: 2.4
+							}) : step.id
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: index === BRIEFING_STEPS.length - 1 ? "h-px flex-1 bg-transparent" : "h-px flex-1 bg-border" })
+					]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+					className: "mt-2 text-center text-[13px] leading-[1.35]",
+					children: [step.line1, step.line2 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("br", {}), step.line2] }) : null]
+				})]
+			}, step.id);
+		})
+	});
+}
+var SUMMARY_ROWS = [
+	{
+		key: "category",
+		label: "Catégorie du besoin",
+		icon: LayoutGrid
+	},
+	{
+		key: "description",
+		label: "Description du besoin",
+		icon: FileText
+	},
+	{
+		key: "budget",
+		label: "Budget",
+		icon: CreditCard
+	},
+	{
+		key: "location",
+		label: "Localisation",
+		icon: MapPin
+	},
+	{
+		key: "deadline",
+		label: "Délai de réalisation",
+		icon: Calendar
+	}
+];
+function nowLabel() {
+	return (/* @__PURE__ */ new Date()).toLocaleTimeString("fr-FR", {
+		hour: "2-digit",
+		minute: "2-digit"
+	});
+}
+/**
+* Redirige vers la connexion en conservant le brief (déjà persisté en
+* localStorage par `useBriefingStore`, clé "briefing-draft") — parcours "sans
+* authentification" (CDC §4.3). `window.location.href` plutôt que le router
+* SPA : cohérent avec le choix déjà fait dans `services/http.ts`
+* (`handleUnauthorized`) pour la même raison (pas de dépendance circulaire,
+* rechargement complet acceptable ici).
+*/
+function redirectToLoginPreservingDraft() {
+	window.location.href = "/connexion?redirect=postuler-un-projet";
+}
+/**
+* SMART BRIEFING IA — écrans 04a (en cours de saisie) et 04b (récapitulatif final).
+* Utilisable en public (`/postuler-un-projet`, sans connexion) ou connecté
+* (`/client/postuler-un-projet`) : le composant est identique, seul l'état
+* d'authentification (`useAuthStore`) change le comportement de publication.
+*/
+function SmartBriefing() {
+	const token = useAuthStore((state) => state.token);
+	const conversationHistory = useBriefingStore((state) => state.conversationHistory);
+	const currentBrief = useBriefingStore((state) => state.currentBrief);
+	const summary = useBriefingStore((state) => state.summary);
+	const suggestion = useBriefingStore((state) => state.suggestion);
+	const step = useBriefingStore((state) => state.step);
+	const completedSteps = useBriefingStore((state) => state.completedSteps);
+	const ready = useBriefingStore((state) => state.ready);
+	const projectId = useBriefingStore((state) => state.projectId);
+	const projectStatus = useBriefingStore((state) => state.projectStatus);
+	const autoPublishRequested = useBriefingStore((state) => state.autoPublishRequested);
+	const addMessage = useBriefingStore((state) => state.addMessage);
+	const setBrief = useBriefingStore((state) => state.setBrief);
+	const setSummary = useBriefingStore((state) => state.setSummary);
+	const setSuggestion = useBriefingStore((state) => state.setSuggestion);
+	const setStep = useBriefingStore((state) => state.setStep);
+	const setCompletedSteps = useBriefingStore((state) => state.setCompletedSteps);
+	const setReady = useBriefingStore((state) => state.setReady);
+	const setProjectId = useBriefingStore((state) => state.setProjectId);
+	const setProjectStatus = useBriefingStore((state) => state.setProjectStatus);
+	const setCdcFileUrl = useBriefingStore((state) => state.setCdcFileUrl);
+	const setAutoPublishRequested = useBriefingStore((state) => state.setAutoPublishRequested);
+	const resetBriefing = useBriefingStore((state) => state.reset);
+	const [draft, setDraft] = (0, import_react.useState)("");
+	const [attachments, setAttachments] = (0, import_react.useState)([]);
+	const [isSending, setIsSending] = (0, import_react.useState)(false);
+	const [isSavingDraft, setIsSavingDraft] = (0, import_react.useState)(false);
+	const [isGeneratingCdc, setIsGeneratingCdc] = (0, import_react.useState)(false);
+	const [isPublishing, setIsPublishing] = (0, import_react.useState)(false);
+	const fileInputRef = (0, import_react.useRef)(null);
+	const [publishedProjectId, setPublishedProjectId] = (0, import_react.useState)(null);
+	const [shortlist, setShortlist] = (0, import_react.useState)([]);
+	const [isLoadingShortlist, setIsLoadingShortlist] = (0, import_react.useState)(false);
+	const [contactedAgencyIds, setContactedAgencyIds] = (0, import_react.useState)([]);
+	const [contactingAgencyId, setContactingAgencyId] = (0, import_react.useState)(null);
+	async function loadShortlist(id) {
+		setIsLoadingShortlist(true);
+		try {
+			const items = await getProjectShortlist(id);
+			setShortlist(items);
+		} catch (error) {
+			toast(error instanceof ApiError ? error.message : "Impossible de charger la shortlist.");
+		} finally {
+			setIsLoadingShortlist(false);
+		}
+	}
+	async function runPublish() {
+		setIsPublishing(true);
+		try {
+			let finalProjectId = projectId;
+			if (finalProjectId && projectStatus === "draft") {
+				finalProjectId = (await publishProject(finalProjectId)).id;
+				setProjectStatus("posted");
+			} else if (!finalProjectId || projectStatus !== "posted") {
+				const { blob, projectId: newId } = await generateCdcPdf(currentBrief);
+				finalProjectId = newId;
+				setProjectId(newId);
+				setProjectStatus("posted");
+				setCdcFileUrl(URL.createObjectURL(blob));
+			}
+			setPublishedProjectId(finalProjectId);
+			toast("Votre projet est publié — il est maintenant visible par les agences.");
+			await loadShortlist(finalProjectId);
+		} catch (error) {
+			toast(error instanceof ApiError ? error.message : "Impossible de publier le projet.");
+		} finally {
+			setIsPublishing(false);
+		}
+	}
+	(0, import_react.useEffect)(() => {
+		if (!autoPublishRequested) return;
+		setAutoPublishRequested(false);
+		if (ready) runPublish();
+		else toast("Vous êtes connecté(e) : reprenez votre conversation, l'assistant IA va continuer.");
+	}, [autoPublishRequested]);
+	function handleSend(event) {
+		event.preventDefault();
+		if (!draft.trim() && attachments.length === 0) return;
+		const content = draft.trim();
+		const userMessage = {
+			id: `user-${Date.now()}`,
+			author: "user",
+			content,
+			time: nowLabel()
+		};
+		addMessage(userMessage);
+		setDraft("");
+		if (attachments.length > 0) {
+			toast("Les pièces jointes ne sont pas encore prises en charge par l'assistant IA.");
+			setAttachments([]);
+		}
+		if (!useAuthStore.getState().token) {
+			addMessage({
+				id: `ai-${Date.now()}`,
+				author: "ai",
+				content: "Merci ! Pour que l'assistant IA analyse votre besoin, connectez-vous ou créez un compte — votre message est conservé, vous n'aurez rien à retaper.",
+				time: nowLabel()
+			});
+			return;
+		}
+		setIsSending(true);
+		sendBriefingMessage({
+			content,
+			conversationHistory: [...conversationHistory, userMessage],
+			currentBrief
+		}).then((result) => {
+			addMessage(result.aiMessage);
+			setBrief(result.brief);
+			setSummary(result.summary);
+			setStep(result.step);
+			setCompletedSteps(result.completedSteps);
+			setReady(result.ready);
+		}).catch((error) => {
+			toast(error instanceof ApiError ? error.message : "Impossible de contacter l'assistant IA.");
+		}).finally(() => setIsSending(false));
+	}
+	function handleAcceptSuggestion() {
+		if (!suggestion) return;
+		acceptSuggestion(projectId ?? "", suggestion.id);
+		setDraft(suggestion.content);
+		setSuggestion(null);
+	}
+	function handleIgnoreSuggestion() {
+		if (!suggestion) return;
+		suggestion.id;
+		setSuggestion(null);
+	}
+	async function handleSaveDraft() {
+		if (!token) {
+			redirectToLoginPreservingDraft();
+			return;
+		}
+		setIsSavingDraft(true);
+		try {
+			const project = projectId && projectStatus === "draft" ? await saveProjectDraft(projectId, currentBrief) : await createProject(currentBrief);
+			setProjectId(project.id);
+			setProjectStatus("draft");
+			toast("Brouillon enregistré.");
+		} catch (error) {
+			toast(error instanceof ApiError ? error.message : "Impossible d'enregistrer le brouillon.");
+		} finally {
+			setIsSavingDraft(false);
+		}
+	}
+	async function handleGenerateCdc() {
+		if (!token) {
+			redirectToLoginPreservingDraft();
+			return;
+		}
+		setIsGeneratingCdc(true);
+		try {
+			const { blob, projectId: newProjectId } = await generateCdcPdf(currentBrief);
+			setProjectId(newProjectId);
+			setProjectStatus("posted");
+			const url = URL.createObjectURL(blob);
+			setCdcFileUrl(url);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = `cdc-${newProjectId}.pdf`;
+			link.click();
+			toast("CDC généré — votre projet a été publié et est déjà visible des agences (le backend actuel ne permet pas de générer un aperçu sans publier).");
+		} catch (error) {
+			toast(error instanceof ApiError ? error.message : "Impossible de générer le CDC.");
+		} finally {
+			setIsGeneratingCdc(false);
+		}
+	}
+	function handlePublish() {
+		if (!token) {
+			redirectToLoginPreservingDraft();
+			return;
+		}
+		runPublish();
+	}
+	async function handleContactAgency(agencyId) {
+		if (!publishedProjectId) return;
+		setContactingAgencyId(agencyId);
+		try {
+			await contactAgencies(publishedProjectId, [agencyId], void 0);
+			setContactedAgencyIds((ids) => [...ids, agencyId]);
+			toast("Message envoyé à l'agence.");
+		} catch (error) {
+			toast(error instanceof ApiError ? error.message : "Envoi impossible.");
+		} finally {
+			setContactingAgencyId(null);
+		}
+	}
+	function handleEdit(targetStep) {
+		setReady(false);
+		if (targetStep) {
+			setStep(targetStep);
+			toast("Décrivez ce que vous souhaitez modifier dans le message ci-dessous — l'assistant ne peut pas revenir en arrière automatiquement sur un champ déjà validé.");
+		}
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "min-h-screen bg-background",
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("header", {
+			className: "border-b border-border",
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+					to: "/",
+					className: "truncate text-[22px] font-bold tracking-tight",
+					children: "Sortlist Pro"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex shrink-0 items-center gap-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							type: "button",
+							onClick: handleSaveDraft,
+							disabled: isSavingDraft,
+							className: "flex items-center gap-2 rounded-md border border-border px-4 py-2 text-[14px] font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
+							children: [isSavingDraft ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, {
+								className: "h-3.5 w-3.5 animate-spin",
+								strokeWidth: 1.8
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Save, {
+								className: "h-3.5 w-3.5",
+								strokeWidth: 1.8
+							}), "Enregistrer brouillon"]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							onClick: () => uiAction("Mon compte"),
+							type: "button",
+							"aria-label": "Mon compte",
+							className: "transition-opacity hover:opacity-70",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleUserRound, {
+								className: "h-[22px] w-[22px]",
+								strokeWidth: 1.5
+							})
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							onClick: () => uiAction("Menu"),
+							type: "button",
+							"aria-label": "Menu",
+							className: "transition-opacity hover:opacity-70",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Menu, {
+								className: "h-[22px] w-[22px]",
+								strokeWidth: 1.5
+							})
+						})
+					]
+				})]
+			})
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
+			className: "mx-auto max-w-[1180px] px-4 pb-20 pt-8 sm:px-6 lg:px-8",
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BriefingStepper, {
+				currentStep: ready ? 5 : step,
+				completedSteps: ready ? [
+					1,
+					2,
+					3,
+					4,
+					5
+				] : completedSteps,
+				onStepClick: ready ? (id) => handleEdit(id) : void 0
+			}), ready ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RecapView, {
+				summary,
+				isGeneratingCdc,
+				isPublishing,
+				onEdit: () => handleEdit(),
+				onGenerateCdc: handleGenerateCdc,
+				onPublish: handlePublish,
+				publishedProjectId,
+				shortlist,
+				isLoadingShortlist,
+				contactedAgencyIds,
+				contactingAgencyId,
+				onContactAgency: handleContactAgency,
+				onResetBriefing: () => {
+					resetBriefing();
+					setPublishedProjectId(null);
+					setShortlist([]);
+				}
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
+						className: "flex items-center gap-2 text-[13.5px] font-semibold",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, {
+							className: "h-3.5 w-3.5",
+							strokeWidth: 1.8
+						}), "Conversation avec l'IA"]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-5 space-y-5",
+						children: [
+							conversationHistory.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bot, {
+									className: "mt-0.5 h-[22px] w-[22px] shrink-0",
+									strokeWidth: 1.6
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "min-w-0",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "whitespace-pre-line text-[13.5px] leading-[1.55]",
+										children: "Bonjour ! Décrivez-moi en quelques mots le besoin que vous souhaitez confier à un prestataire."
+									})
+								})]
+							}) : conversationHistory.map((message) => message.author === "ai" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bot, {
+									className: "mt-0.5 h-[22px] w-[22px] shrink-0",
+									strokeWidth: 1.6
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "whitespace-pre-line text-[13.5px] leading-[1.55]",
+										children: message.content
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1.5 text-right text-[13px] text-muted-foreground",
+										children: message.time
+									})]
+								})]
+							}, message.id) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "pl-8",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "rounded-lg border border-border px-4 py-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "whitespace-pre-line text-[13.5px] leading-[1.55]",
+										children: message.content
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "mt-1.5 text-right text-[13px] text-muted-foreground",
+										children: message.time
+									})]
+								})
+							}, message.id)),
+							isSending ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-3 text-muted-foreground",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, {
+									className: "h-4 w-4 animate-spin",
+									strokeWidth: 1.8
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-[13px]",
+									children: "L'assistant réfléchit..."
+								})]
+							}) : null,
+							suggestion ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Sparkles, {
+									className: "mt-0.5 h-4 w-4 shrink-0",
+									strokeWidth: 1.8
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-[13.5px] font-semibold",
+											children: "Suggestion de l'IA :"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "mt-1 whitespace-pre-line text-[13.5px] leading-[1.55]",
+											children: suggestion.content
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "mt-3 flex gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: handleAcceptSuggestion,
+												className: "rounded-md bg-primary px-4 py-1.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90",
+												children: "Ajouter"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+												type: "button",
+												onClick: handleIgnoreSuggestion,
+												className: "rounded-md border border-border px-4 py-1.5 text-[13px] font-semibold transition-colors hover:bg-accent",
+												children: "Ignorer"
+											})]
+										})
+									]
+								})]
+							}) : null
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+						onSubmit: handleSend,
+						className: "mt-7",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "rounded-lg border border-border p-4",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("textarea", {
+								value: draft,
+								onChange: (event) => setDraft(event.target.value),
+								rows: 3,
+								placeholder: "Décrivez plus en détail votre besoin...",
+								className: "w-full resize-none bg-transparent text-[13.5px] leading-[1.55] outline-none placeholder:text-muted-foreground"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "mt-2 flex items-end justify-between gap-4",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "min-w-0",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											type: "button",
+											"aria-label": "Joindre un fichier",
+											onClick: () => fileInputRef.current?.click(),
+											className: "text-muted-foreground transition-colors hover:text-foreground",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Paperclip, {
+												className: "h-4 w-4",
+												strokeWidth: 1.8
+											})
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+											ref: fileInputRef,
+											type: "file",
+											multiple: true,
+											className: "hidden",
+											onChange: (event) => setAttachments(Array.from(event.target.files ?? []))
+										}),
+										attachments.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "mt-1 truncate text-[13px] text-muted-foreground",
+											children: [attachments.length, " fichier(s) joint(s)"]
+										}) : null
+									]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+									type: "submit",
+									"aria-label": "Envoyer",
+									disabled: isSending,
+									className: "shrink-0 transition-opacity hover:opacity-70 disabled:opacity-40",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Send, {
+										className: "h-4 w-4",
+										strokeWidth: 1.8
+									})
+								})]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-2 text-[13px] text-muted-foreground",
+							children: "Soyez le plus précis possible, l'IA vous aidera à structurer votre demande."
+						})]
+					})
+				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
+						className: "text-[13.5px] font-semibold",
+						children: [
+							"Résumé de votre CDC",
+							" ",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-normal text-muted-foreground",
+								children: "(en temps réel)"
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mt-5 space-y-6",
+						children: SUMMARY_ROWS.map((row) => {
+							const entry = summary[row.key];
+							const subValue = "subValue" in entry ? entry.subValue : null;
+							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-start gap-3",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(row.icon, {
+										className: "mt-0.5 h-[18px] w-[18px] shrink-0",
+										strokeWidth: 1.6
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "min-w-0 flex-1",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-[13.5px] font-bold",
+												children: row.label
+											}),
+											entry.value ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "mt-0.5 whitespace-pre-line text-[13px] leading-[1.5]",
+												children: entry.value
+											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "mt-0.5 text-[13px] text-muted-foreground",
+												children: "À compléter"
+											}),
+											subValue ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-[13px] text-muted-foreground",
+												children: subValue
+											}) : null
+										]
+									}),
+									entry.done ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Check, {
+											className: "h-3 w-3 text-primary-foreground",
+											strokeWidth: 2.6
+										})
+									}) : null
+								]
+							}, row.key);
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "mt-7 flex items-start gap-2 text-[13px] leading-[1.5] text-muted-foreground",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, {
+							className: "mt-0.5 h-3.5 w-3.5 shrink-0",
+							strokeWidth: 1.8
+						}), "Les informations se complètent au fur et à mesure de vos réponses."]
+					})
+				] })]
+			})]
+		})]
+	});
+}
+function RecapView({ summary, isGeneratingCdc, isPublishing, onEdit, onGenerateCdc, onPublish, publishedProjectId, shortlist, isLoadingShortlist, contactedAgencyIds, contactingAgencyId, onContactAgency, onResetBriefing }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "mx-auto mt-12 max-w-[720px]",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+				className: "text-center text-[30px] font-bold tracking-tight",
+				children: "Votre brief est prêt !"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-2 text-center text-[14px] text-muted-foreground",
+				children: "Voici le récapitulatif de votre cahier des charges."
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("dl", {
+				className: "mt-10 space-y-7",
+				children: SUMMARY_ROWS.map((row) => {
+					const entry = summary[row.key];
+					const subValue = "subValue" in entry ? entry.subValue : null;
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[auto_200px_minmax(0,1fr)]",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(row.icon, {
+								className: "mt-0.5 h-[19px] w-[19px] shrink-0",
+								strokeWidth: 1.6
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", {
+								className: "min-w-0 text-[13.5px] font-bold",
+								children: row.label
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("dd", {
+								className: "col-span-2 min-w-0 sm:col-span-1",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "whitespace-pre-line text-[13.5px] font-bold leading-[1.55]",
+									children: entry.value ?? "À compléter"
+								}), subValue ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-0.5 text-[13px] text-muted-foreground",
+									children: subValue
+								}) : null]
+							})
+						]
+					}, row.key);
+				})
+			}),
+			!publishedProjectId ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mt-10 grid grid-cols-1 gap-3 sm:grid-cols-3",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						onClick: onEdit,
+						className: "rounded-md border border-border py-3.5 text-[14px] font-semibold transition-colors hover:bg-accent",
+						children: "Modifier"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: onGenerateCdc,
+						disabled: isGeneratingCdc,
+						className: "flex items-center justify-center gap-2 rounded-md border border-border py-3.5 text-[14px] font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
+						children: [isGeneratingCdc ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, {
+							className: "h-4 w-4 animate-spin",
+							strokeWidth: 1.8
+						}) : null, "Générer le CDC (PDF)"]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						onClick: onPublish,
+						disabled: isPublishing,
+						className: "flex items-center justify-center gap-2 rounded-md bg-primary py-3.5 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
+						children: [isPublishing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LoaderCircle, {
+							className: "h-4 w-4 animate-spin",
+							strokeWidth: 1.8
+						}) : null, "Postuler le projet"]
+					})
+				]
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+				className: "mt-5 flex items-start gap-2 text-[13px] leading-[1.5] text-muted-foreground",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Info, {
+					className: "mt-0.5 h-3.5 w-3.5 shrink-0",
+					strokeWidth: 1.8
+				}), "En l'état du backend, \"Générer le CDC\" publie déjà votre projet aux agences (pas d'aperçu sans effet de bord disponible) — \"Postuler le projet\" reste le point d'entrée normal."]
+			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShortlistSection, {
+				projectId: publishedProjectId,
+				shortlist,
+				isLoading: isLoadingShortlist,
+				contactedAgencyIds,
+				contactingAgencyId,
+				onContactAgency,
+				onResetBriefing
+			})
+		]
+	});
+}
+/**
+* Shortlist matching (CDC §1.3.3, §1.5.8) : différenciateur MUST absent de
+* l'UI existante (aucun autre écran ne l'affichait, cf. cartographie §2) —
+* ajout de composant strictement nécessaire, alimenté par
+* `agencies.service.ts::getProjectShortlist`.
+*/
+function ShortlistSection({ projectId, shortlist, isLoading, contactedAgencyIds, contactingAgencyId, onContactAgency, onResetBriefing }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "mt-10 border-t border-border pt-10",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+				className: "text-[18px] font-bold tracking-tight",
+				children: "Shortlist d'agences recommandées"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+				className: "mt-1 text-[13.5px] text-muted-foreground",
+				children: [
+					"Sélection générée par le matching IA pour votre projet",
+					" ",
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "font-semibold",
+						children: projectId
+					}),
+					"."
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mt-6",
+				children: isLoading ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StackSkeleton, { count: 3 }) : shortlist.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(EmptyState, { message: "Aucune agence recommandée pour le moment." }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "grid grid-cols-1 gap-4 sm:grid-cols-2",
+					children: shortlist.map((agency) => {
+						const isContacted = contactedAgencyIds.includes(agency.id);
+						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
+							className: "rounded-lg border border-border p-4",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-start justify-between gap-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "min-w-0",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-[15px] font-bold",
+											children: agency.name
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+											className: "mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(MapPin, {
+												className: "h-3.5 w-3.5 shrink-0",
+												strokeWidth: 1.8
+											}), agency.location]
+										})]
+									}), agency.matchingScore !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										className: "flex shrink-0 items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-[12.5px] font-semibold",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Star, {
+												className: "h-3 w-3 fill-current",
+												strokeWidth: 0
+											}),
+											agency.matchingScore,
+											"%"
+										]
+									}) : null]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "mt-2 line-clamp-2 text-[13px] text-muted-foreground",
+									children: agency.description
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "mt-4 flex flex-wrap gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										onClick: () => onContactAgency(agency.id),
+										disabled: isContacted || contactingAgencyId === agency.id,
+										className: "rounded-md bg-primary px-3.5 py-2 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50",
+										children: contactingAgencyId === agency.id ? "Envoi..." : isContacted ? "Envoyé" : "Envoyer"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+										to: "/agences/$id",
+										params: { id: agency.id },
+										className: "rounded-md border border-border px-3.5 py-2 text-[13px] font-semibold transition-colors hover:bg-accent",
+										children: "Voir profil"
+									})]
+								})
+							]
+						}, agency.id);
+					})
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mt-8 flex flex-wrap gap-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Link, {
+					to: "/client/mes-projets",
+					className: "rounded-md bg-primary px-5 py-3 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-90",
+					children: "Voir mes projets"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					onClick: onResetBriefing,
+					className: "rounded-md border border-border px-5 py-3 text-[14px] font-semibold transition-colors hover:bg-accent",
+					children: "Publier un nouveau projet"
+				})]
+			})
+		]
+	});
+}
+//#endregion
+export { SmartBriefing as t };

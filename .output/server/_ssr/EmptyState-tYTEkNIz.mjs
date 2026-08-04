@@ -1,0 +1,523 @@
+import { a as frappeCall, o as restCall, r as camelizeKeys } from "./http-DhyEQgDt.mjs";
+import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/EmptyState-tYTEkNIz.js
+var import_jsx_runtime = require_jsx_runtime();
+var STATUS_MAP = {
+	draft: "draft",
+	published: "published",
+	"in progress": "in_progress",
+	in_progress: "in_progress",
+	suspended: "suspended",
+	finished: "finished",
+	completed: "finished",
+	rejected: "rejected"
+};
+function mapProjectStatus(rawStatus) {
+	return STATUS_MAP[String(rawStatus ?? "").trim().toLowerCase()] ?? "draft";
+}
+var STATUS_LABELS = {
+	draft: "Brouillon",
+	published: "Publié",
+	in_progress: "En cours",
+	suspended: "Suspendu",
+	finished: "Terminé",
+	rejected: "Rejeté"
+};
+/**
+* Traduit un doctype Frappe `Project` (snake_case) vers le type `Project`
+* (camelCase) du frontend. Les champs sans équivalent direct dans les
+* champs "historiques" (reference, statusLabel, lastActivity, ...) sont
+* approximés au mieux — voir les champs additionnels ajoutés à `Project`
+* dans `lib/types.ts` pour les vraies valeurs backend brutes.
+* // TODO backend: `reference`/`lastActivity`/`features`/`constraints` n'ont pas
+* // d'équivalent identifié côté doctype Project — laissés en best-effort/vide.
+*/
+function mapProject(raw) {
+	const data = camelizeKeys(raw);
+	const status = mapProjectStatus(data["status"]);
+	return {
+		id: String(data["id"] ?? data["name"] ?? data["project"] ?? ""),
+		reference: String(data["reference"] ?? data["name"] ?? data["project"] ?? ""),
+		title: String(data["title"] ?? ""),
+		category: String(data["category"] ?? ""),
+		subCategory: String(data["subCategory"] ?? ""),
+		status,
+		statusLabel: String(data["statusLabel"] ?? STATUS_LABELS[status]),
+		lastActivity: String(data["lastActivity"] ?? data["modified"] ?? data["projectCreatedOn"] ?? ""),
+		budgetMin: data["budgetMin"] !== void 0 ? Number(data["budgetMin"]) : null,
+		budgetMax: data["budgetMax"] !== void 0 ? Number(data["budgetMax"]) : null,
+		location: String(data["location"] ?? ""),
+		startedAt: data["startDate"] ?? null,
+		partnerAgencyName: data["partnerAgencyName"] ?? null,
+		objective: String(data["description"] ?? data["objective"] ?? ""),
+		features: Array.isArray(data["features"]) ? data["features"] : [],
+		constraints: Array.isArray(data["constraints"]) ? data["constraints"] : [],
+		deadline: String(data["deadline"] ?? ""),
+		locked: Boolean(data["cdcLocked"] ?? data["locked"] ?? false),
+		client: data["client"],
+		description: data["description"],
+		needType: data["needType"],
+		channel: data["channel"],
+		deliveryDelayDays: data["deliveryDelayDays"] !== void 0 ? Number(data["deliveryDelayDays"]) : void 0,
+		rejectionSubstatus: data["rejectionSubstatus"] ?? void 0,
+		cdcFile: data["cdcFile"] ?? void 0,
+		shortlistIa: Array.isArray(data["shortlistIa"]) ? data["shortlistIa"] : void 0,
+		acceptanceDate: data["acceptanceDate"] ?? void 0,
+		expectedEndDate: data["expectedEndDate"] ?? void 0,
+		totalSuspensionDays: data["totalSuspensionDays"] !== void 0 ? Number(data["totalSuspensionDays"]) : void 0,
+		completionConfirmedByClient: data["completionConfirmedByClient"] !== void 0 ? Boolean(data["completionConfirmedByClient"]) : void 0,
+		repostCount: data["repostCount"] !== void 0 ? Number(data["repostCount"]) : void 0
+	};
+}
+function mapProjectList(raw) {
+	const data = camelizeKeys(raw);
+	if (Array.isArray(raw)) return raw;
+	return data["results"] ?? data["items"] ?? [];
+}
+/**
+* // API CALL : frappeCall("project.my_projects", { status: params?.status })
+*/
+async function getMyProjects(params) {
+	const page = params?.page ?? 1;
+	const pageSize = params?.pageSize ?? 20;
+	const items = mapProjectList(await frappeCall("project.my_projects", { status: params?.status })).map((item) => mapProject(item));
+	return {
+		items,
+		page,
+		pageSize,
+		total: items.length,
+		totalPages: 1
+	};
+}
+/**
+* // API CALL : frappeCall("project.get_project", { project: id })
+*/
+async function getProject(id) {
+	return mapProject(await frappeCall("project.get_project", { project: id }));
+}
+/**
+* // TODO backend: pas d'endpoint dédié "recherche projets publics" côté client.
+* // Le seul endpoint proche trouvé est `opportunity.list_available_projects`,
+* // qui liste les projets disponibles côté AGENCE (Actions rapides). La
+* // recherche publique de projets par un client n'a pas vraiment de sens
+* // fonctionnel dans le CDC (un client voit ses propres projets, pas un
+* // catalogue public) — cette fonction reste donc probablement inutilisée côté
+* // client. On mappe en attendant vers `opportunity.list_available_projects`
+* // pour ne pas planter si elle est appelée, à confirmer/retirer avec le CDC.
+*/
+async function searchProjects(params) {
+	const page = params.page ?? 1;
+	const pageSize = params.pageSize ?? 20;
+	const budgetParts = (params.budget ?? "").split("-").map((value) => value.trim());
+	const budgetMin = budgetParts[0] || void 0;
+	const budgetMax = budgetParts[1] || (budgetParts.length === 1 ? budgetParts[0] : void 0);
+	const raw = await frappeCall("opportunity.list_available_projects", {
+		query: params.query,
+		category: params.category,
+		sub_category: params.subCategory,
+		budget_min: budgetMin,
+		budget_max: budgetMax,
+		page,
+		page_size: pageSize
+	});
+	const items = mapProjectList(raw).map((item) => mapProject(item));
+	const data = camelizeKeys(raw);
+	const total = Number(data["total"] ?? items.length);
+	return {
+		items,
+		page,
+		pageSize,
+		total,
+		totalPages: Math.max(1, Math.ceil(total / pageSize)),
+		availableCount: total
+	};
+}
+/**
+* `BRIEF_FIELDS` côté backend (`platform_core/platform_core/api/project.py`)
+* est une liste blanche EN SNAKE_CASE (`need_type`, `sub_category`,
+* `budget_min`, `budget_max`, `delivery_delay_days`, ...) filtrée via
+* `**fields` par `quick_actions.start_contact`/`project.update_brief`. Les
+* versions précédentes de `createProject`/`saveProjectDraft` étalaient le
+* payload camelCase tel quel (`...body`) : chaque champ (`budgetMin`,
+* `subCategory`, ...) ne matchait donc AUCUNE clé de la liste blanche et
+* était silencieusement ignoré côté serveur — seul `need_type` passait. Un
+* appelant réel (`SmartBriefing.tsx::handleSaveDraft`) dépendant de ces
+* fonctions, corrigé ici en convertissant explicitement vers snake_case.
+*/
+function toBriefFieldsPayload(payload) {
+	const map = {
+		needType: "need_type",
+		category: "category",
+		subCategory: "sub_category",
+		budgetMin: "budget_min",
+		budgetMax: "budget_max",
+		location: "location",
+		deliveryDelayDays: "delivery_delay_days",
+		description: "description",
+		title: "title"
+	};
+	const result = {};
+	for (const [camelKey, snakeKey] of Object.entries(map)) if (payload[camelKey] !== void 0) result[snakeKey] = payload[camelKey];
+	return result;
+}
+/**
+* Pas de fonction `create_draft` whitelisted trouvée côté backend (existe en
+* interne, non exposée). On mappe vers `quick_actions.start_contact`, qui crée
+* un Project en Draft à partir d'un besoin exprimé rapidement (Actions rapides).
+* // TODO backend: si le payload provient du Smart Briefing IA, préférer plutôt
+* // `briefing.service.ts::generateCdcPdf` (`ia-service` -> `briefing.confirm`),
+* // qui crée le projet ET génère le CDC en une fois — mais poste aussi
+* // immédiatement le projet (voir le commentaire détaillé dans ce fichier),
+* // ce que `createProject` ne fait pas (reste en `Draft`). Utilisé par
+* // `SmartBriefing.tsx::handleSaveDraft` quand aucun projet n'existe encore.
+*/
+async function createProject(payload) {
+	const body = toBriefFieldsPayload(payload);
+	return mapProject(await frappeCall("quick_actions.start_contact", {
+		need_type: body["need_type"] ?? "Projet",
+		...body
+	}));
+}
+/**
+* // API CALL : frappeCall("project.update_brief", { project: id, ...payload })
+*/
+async function saveProjectDraft(id, payload) {
+	return mapProject(await frappeCall("project.update_brief", {
+		project: id,
+		...toBriefFieldsPayload(payload)
+	}));
+}
+/**
+* // API CALL : frappeCall("project.post_project", { project: id })
+*/
+async function publishProject(id) {
+	return mapProject(await frappeCall("project.post_project", { project: id }));
+}
+function initialsFromName(name) {
+	const parts = name.trim().split(/\s+/).filter(Boolean);
+	if (parts.length === 0) return "?";
+	return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "")).toUpperCase();
+}
+/**
+* Traduit une agence Frappe (snake_case) vers le type `Agency` (camelCase).
+* // TODO backend: forme exacte des champs non documentée précisément — mapping
+* // best-effort sur les noms les plus probables (name/agency_name, location,
+* // description, rating, reviews_count, matching_score).
+*/
+function mapAgency(raw) {
+	const data = camelizeKeys(raw);
+	const name = String(data["agencyName"] ?? data["name"] ?? "");
+	return {
+		id: String(data["id"] ?? data["agency"] ?? data["name"] ?? ""),
+		name,
+		logoText: String(data["logoText"] ?? initialsFromName(name)),
+		location: String(data["location"] ?? ""),
+		description: String(data["description"] ?? ""),
+		rating: Number(data["rating"] ?? 0),
+		reviewsCount: Number(data["reviewsCount"] ?? 0),
+		matchingScore: data["matchingScore"] !== void 0 && data["matchingScore"] !== null ? Number(data["matchingScore"]) : null
+	};
+}
+/**
+* // API CALL : frappeCall("agency.list_agencies", { query, category, location, page, page_size })
+* // (allow_guest côté backend)
+*/
+async function searchAgencies(params) {
+	const page = params.page ?? 1;
+	const pageSize = params.pageSize ?? 20;
+	const raw = await frappeCall("agency.list_agencies", {
+		query: params.query,
+		category: params.category,
+		location: params.subCategory,
+		page,
+		page_size: pageSize
+	});
+	const data = camelizeKeys(raw);
+	const items = (data["results"] ?? data["items"] ?? (Array.isArray(raw) ? raw : [])).map((item) => mapAgency(item));
+	const total = Number(data["total"] ?? items.length);
+	return {
+		items,
+		page,
+		pageSize,
+		total,
+		totalPages: Math.max(1, Math.ceil(total / pageSize)),
+		foundCount: total
+	};
+}
+/**
+* // API CALL : restCall('matching', `/${projectId}/shortlist`, { method: 'GET' })
+* // ROUTAGE : `microservices/matching-service/.../MatchingController.java` monte
+* // `@RequestMapping("/api/matching")` et le Gateway route `/api/matching/**` en
+* // passthrough (sans réécriture) — `restCall("matching", path)` préfixe déjà
+* // `/api/matching`, `path` ne doit donc pas le répéter (sinon 404 : le chemin
+* // serait doublé en `/api/matching/api/matching/...`). Corrigé ici — la version
+* // précédente de cette fonction avait le même bug que celui trouvé et corrigé
+* // dans `briefing.service.ts` pour `ia-service`.
+*/
+async function getProjectShortlist(projectId) {
+	const raw = await restCall("matching", `/${projectId}/shortlist`, { method: "GET" });
+	return ((Array.isArray(raw) ? raw : camelizeKeys(raw)["shortlist"]) ?? []).map((item) => mapAgency(item));
+}
+/**
+* // API CALL :
+* //  - si `brief` est fourni : frappeCall("quick_actions.send_multicast", { project: projectId, agencies: JSON.stringify(agencyIds) })
+* //    (Multicast avec formulaire personnalisé)
+* //  - sinon : boucle frappeCall("quick_actions.contact_from_shortlist", { project: projectId, agency: id })
+* //    pour chaque agence (envoi direct depuis la Shortlist)
+*/
+async function contactAgencies(projectId, agencyIds, brief) {
+	if (brief !== void 0 && brief !== null) {
+		const raw = await frappeCall("quick_actions.send_multicast", {
+			project: projectId,
+			agencies: JSON.stringify(agencyIds),
+			brief
+		});
+		const data = camelizeKeys(raw);
+		return { sentCount: Number(data["sentCount"] ?? agencyIds.length) };
+	}
+	let sentCount = 0;
+	for (const agencyId of agencyIds) {
+		await frappeCall("quick_actions.contact_from_shortlist", {
+			project: projectId,
+			agency: agencyId
+		});
+		sentCount += 1;
+	}
+	return { sentCount };
+}
+/**
+* // API CALL : frappeCall("agency.my_agencies")
+*/
+async function getMyAgencies() {
+	const raw = await frappeCall("agency.my_agencies");
+	return (Array.isArray(raw) ? raw : []).map((item) => {
+		const data = camelizeKeys(item);
+		const name = String(data["agencyName"] ?? data["name"] ?? "");
+		const membership = String(data["membership"] ?? data["role"] ?? "").toLowerCase();
+		return {
+			id: String(data["id"] ?? data["name"] ?? ""),
+			initials: String(data["initials"] ?? initialsFromName(name)),
+			name,
+			tagline: String(data["tagline"] ?? data["slogan"] ?? ""),
+			membership: membership === "owner" ? "owner" : "member"
+		};
+	});
+}
+/**
+* // API CALL : frappeCall("agency.join_request", { agency: id })
+*/
+async function requestToJoinAgency(id) {
+	const raw = await frappeCall("agency.join_request", { agency: id });
+	const data = camelizeKeys(raw);
+	return { requested: Boolean(data["requested"] ?? true) };
+}
+/**
+* Version "riche" de `getAgency`, pour le profil public complet
+* (`agences.$id.tsx`) : `agency.get_profile` (allow_guest, vérifié en lisant
+* `platform_core/platform_core/api/agency.py`) renvoie `doc.as_dict()` en
+* entier — y compris les tables enfants (`services`/`portfolio`/`team`/
+* `certifications`) que `mapAgency`/`getAgency` (ci-dessus, utilisé par les
+* cartes de résultats de recherche) ignorent volontairement pour rester
+* léger. Fonction additive, ne remplace pas `getAgency`.
+* // API CALL : frappeCall("agency.get_profile", { agency: id }) — allow_guest
+*/
+async function getAgencyProfile(id) {
+	const raw = await frappeCall("agency.get_profile", { agency: id });
+	const data = camelizeKeys(raw);
+	return {
+		...mapAgency(raw),
+		foundedYear: String(data["yearFounded"] ?? ""),
+		teamSize: String(data["teamSize"] ?? ""),
+		website: String(data["website"] ?? ""),
+		languages: Array.isArray(data["languages"]) ? data["languages"] : [],
+		remoteWork: Boolean(data["remoteWork"] ?? false),
+		legalIdValue: String(data["legalId"] ?? ""),
+		legalIdValid: Boolean(data["legalIdVerified"] ?? false),
+		techStack: Array.isArray(data["techStack"]) ? data["techStack"] : [],
+		skills: Array.isArray(data["skills"]) ? data["skills"] : [],
+		phoneCountryCode: String(data["phoneCountryCode"] ?? ""),
+		phone: String(data["phone"] ?? ""),
+		email: String(data["email"] ?? ""),
+		address: String(data["address"] ?? data["location"] ?? ""),
+		logo: data["logo"] ?? void 0,
+		slogan: data["slogan"] ?? void 0,
+		coverImage: data["coverImage"] ?? void 0,
+		services: Array.isArray(data["services"]) ? data["services"] : void 0,
+		portfolio: Array.isArray(data["portfolio"]) ? data["portfolio"] : void 0,
+		team: Array.isArray(data["team"]) ? data["team"] : void 0,
+		certifications: Array.isArray(data["certifications"]) ? data["certifications"] : void 0
+	};
+}
+/**
+* // API CALL : frappeCall("review.list_agency_reviews", { agency: id, page, page_size }) — allow_guest
+* // TODO backend: `AgencyReview` (cf. `platform_core/platform_core/api/review.py`)
+* // n'expose ni auteur ni initiales (avis internalisés/anonymisés côté
+* // plateforme, cf. CDC "anti-faux-avis") — `authorName`/`authorInitials`
+* // n'ont donc pas de source réelle : affichés en "Client vérifié" plutôt que
+* // fabriqués.
+*/
+async function listAgencyReviews(id, page = 1, pageSize = 10) {
+	const raw = await frappeCall("review.list_agency_reviews", {
+		agency: id,
+		page,
+		page_size: pageSize
+	});
+	return (Array.isArray(raw) ? raw : []).map((item, index) => {
+		const data = camelizeKeys(item);
+		return {
+			id: String(data["name"] ?? index),
+			authorInitials: "CV",
+			authorName: "Client vérifié",
+			rating: Number(data["rating"] ?? 0),
+			comment: String(data["comment"] ?? ""),
+			publishedAt: String(data["creation"] ?? "")
+		};
+	});
+}
+/**
+* Flux Unicast (CDC §1.5.4) : contact direct d'une agence depuis son profil
+* public, avec un formulaire dynamique Projet/Stage/Job. Pas de fonction
+* unique côté backend pour ça : `quick_actions.start_contact` crée un
+* `Project` brouillon (et génère un CDC preview, cf.
+* `platform_core/platform_core/api/quick_actions.py::start_contact`), puis
+* `quick_actions.send_unicast` le poste et crée l'`Opportunity` vers
+* l'agence ciblée. Réservé aux clients connectés
+* (`require_user_type("client")` côté backend) — un appel sans token
+* échouera en 401, intercepté globalement par `services/http.ts`.
+* // API CALL : frappeCall("quick_actions.start_contact", { need_type, ...fields })
+* // API CALL : frappeCall("quick_actions.send_unicast", { project, agency })
+*/
+async function contactAgencyUnicast(agencyId, payload) {
+	const draft = await frappeCall("quick_actions.start_contact", {
+		need_type: payload.needType,
+		title: payload.title,
+		description: payload.description,
+		category: payload.category,
+		budget_min: payload.budgetMin,
+		budget_max: payload.budgetMax,
+		location: payload.location
+	});
+	const draftData = camelizeKeys(draft);
+	const projectId = String(draftData["name"] ?? draftData["id"] ?? "");
+	const sent = await frappeCall("quick_actions.send_unicast", {
+		project: projectId,
+		agency: agencyId
+	});
+	const sentData = camelizeKeys(sent);
+	return {
+		projectId: String(sentData["project"] ?? projectId),
+		opportunityId: String(sentData["opportunity"] ?? "")
+	};
+}
+/**
+* // API CALL : frappeCall("agency.toggle_project_favorite", { project })
+* Bascule le statut favori d'un projet public pour l'agence active — utilisé
+* par le bouton "Enregistrer" de `routes/projets.tsx`.
+*/
+async function toggleProjectFavorite(projectId) {
+	const raw = await frappeCall("agency.toggle_project_favorite", { project: projectId });
+	const data = camelizeKeys(raw);
+	return { favorited: Boolean(data["favorited"] ?? false) };
+}
+/**
+* // API CALL : frappeCall("agency.list_favorite_projects")
+*/
+async function listFavoriteProjects() {
+	const raw = await frappeCall("agency.list_favorite_projects", {});
+	return (Array.isArray(raw) ? raw : []).map((item) => mapProject(item));
+}
+/**
+* // API CALL : frappeCall("utils.get_categories") — allow_guest
+* Taxonomie catégories/sous-catégories (`ServiceCategory`/`ServiceSubCategory`),
+* réutilisée pour les filtres réels de `routes/projets.tsx` (catégorie/
+* sous-catégorie, auparavant en texte libre faute d'endpoint identifié).
+*/
+async function getCategories() {
+	const raw = await frappeCall("utils.get_categories", {});
+	return (Array.isArray(raw) ? raw : []).map((item) => {
+		const data = camelizeKeys(item);
+		const subCategoriesRaw = Array.isArray(data["subCategories"]) ? data["subCategories"] : [];
+		return {
+			id: String(data["name"] ?? ""),
+			name: String(data["categoryName"] ?? ""),
+			icon: data["icon"] ?? null,
+			subCategories: subCategoriesRaw.map((sub) => {
+				const subData = camelizeKeys(sub);
+				return {
+					id: String(subData["name"] ?? ""),
+					name: String(subData["subCategoryName"] ?? ""),
+					categoryId: String(subData["category"] ?? "")
+				};
+			})
+		};
+	});
+}
+var AGENCY_ACTIVITY_LABELS = {
+	"Profile View": "Consultation du profil",
+	"Website Click": "Clic vers votre site",
+	"Search Impression": "Impression dans les résultats de recherche"
+};
+/**
+* `agency.get_dashboard` alimente "Activités récentes" à partir du doctype
+* `AgencyActivity` (suivi analytics : vues de profil / clics site / impressions
+* de recherche — pas un journal d'activité métier générique). Les entrées ne
+* portent pas d'identifiant propre (`name` non exposé par l'endpoint) : on
+* synthétise un id stable à partir de l'index.
+*/
+function mapAgencyActivity(raw, index) {
+	const data = camelizeKeys(raw);
+	const eventType = String(data["eventType"] ?? "");
+	return {
+		id: `agency-activity-${index}`,
+		date: String(data["createdDate"] ?? data["creation"] ?? ""),
+		title: AGENCY_ACTIVITY_LABELS[eventType] ?? (eventType || "Activité"),
+		description: ""
+	};
+}
+/**
+* // API CALL : frappeCall("agency.get_dashboard")
+* Agrégat dédié au tableau de bord Agence en un seul appel — remplace la
+* composition précédente de `agence.tableau-de-bord.tsx` (`profile.service.ts
+* ::getAgencyDashboard` + `getAgencyProjects` juste pour dériver les stats).
+*/
+async function getAgencyDashboardOverview() {
+	const raw = await frappeCall("agency.get_dashboard", {});
+	const data = camelizeKeys(raw);
+	const recentOpportunitiesList = Array.isArray(data["recentOpportunities"]) ? data["recentOpportunities"] : [];
+	const recentActivityList = Array.isArray(data["recentActivity"]) ? data["recentActivity"] : [];
+	return {
+		pqiScore: Number(data["pqiScore"] ?? 0),
+		openOpportunitiesCount: Number(data["openOpportunitiesCount"] ?? 0),
+		inProgressCount: Number(data["inProgressCount"] ?? 0),
+		averageClientRating: Number(data["averageClientRating"] ?? 0),
+		recentOpportunities: recentOpportunitiesList.map((entry) => {
+			const item = camelizeKeys(entry);
+			return {
+				id: String(item["opportunity"] ?? ""),
+				projectId: String(item["project"] ?? ""),
+				projectTitle: String(item["title"] ?? ""),
+				status: String(item["status"] ?? ""),
+				matchingScore: item["matchingScore"] !== void 0 ? Number(item["matchingScore"]) : null,
+				budgetMin: item["budgetMin"] !== void 0 ? Number(item["budgetMin"]) : null,
+				budgetMax: item["budgetMax"] !== void 0 ? Number(item["budgetMax"]) : null,
+				publishedAt: String(item["creation"] ?? "")
+			};
+		}),
+		recentActivity: recentActivityList.map((entry, index) => mapAgencyActivity(entry, index))
+	};
+}
+/**
+* État vide générique — utilisé partout où le backend ne renvoie encore aucune donnée.
+* Aucun contenu fictif : le libellé est neutre.
+*/
+function EmptyState({ message = "Aucune donnée à afficher." }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "flex items-center justify-center rounded-lg border border-dashed border-border px-6 py-14",
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+			className: "text-[15px] text-muted-foreground",
+			children: message
+		})
+	});
+}
+//#endregion
+export { saveProjectDraft as _, getAgencyDashboardOverview as a, toggleProjectFavorite as b, getMyAgencies as c, getProjectShortlist as d, listAgencyReviews as f, requestToJoinAgency as g, publishProject as h, createProject as i, getMyProjects as l, mapProject as m, contactAgencies as n, getAgencyProfile as o, listFavoriteProjects as p, contactAgencyUnicast as r, getCategories as s, EmptyState as t, getProject as u, searchAgencies as v, searchProjects as y };

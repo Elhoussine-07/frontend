@@ -1,0 +1,406 @@
+import { r as __toESM } from "../_runtime.mjs";
+import { n as create } from "../_libs/zustand.mjs";
+import { u as require_react } from "../_libs/@floating-ui/react-dom+[...].mjs";
+import { a as frappeCall, i as fetchBlob, n as GATEWAY_URL, r as camelizeKeys, t as ApiError } from "./http-DhyEQgDt.mjs";
+import { a as require_jsx_runtime } from "../_libs/@radix-ui/react-collection+[...].mjs";
+import { L as FileText, Q as ChevronDown, V as Download } from "../_libs/lucide-react.mjs";
+import { a as StatCard, c as StatusTabs, o as StatGrid, r as SearchInput, s as StatusBadge } from "./Blocks-BPzJNs1k.mjs";
+import { r as StatSkeleton } from "./Skeletons-BmbDCxzK.mjs";
+import { n as useQuery } from "../_libs/tanstack__react-query.mjs";
+import { n as toast } from "../_libs/sonner.mjs";
+import { t as DashboardShell } from "./DashboardShell-BexnO34z.mjs";
+import { t as uiAction } from "./ui-actions-Crijx9Um.mjs";
+import { n as ListPagination, t as FilterSelect } from "./ListControls-CdCTDF4c.mjs";
+import { t as DataTable } from "./DataTable-Dz2k6f1R.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/agence.facturation-GJn4wuLt.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+var STATUS_MAP = {
+	paid: "paid",
+	payée: "paid",
+	payee: "paid",
+	"en attente": "to_pay",
+	pending: "to_pay",
+	unpaid: "to_pay",
+	overdue: "late",
+	"en retard": "late",
+	late: "late"
+};
+var STATUS_LABELS = {
+	paid: "Payée",
+	to_pay: "À payer",
+	late: "En retard"
+};
+function mapInvoiceStatus(raw) {
+	return STATUS_MAP[String(raw ?? "").trim().toLowerCase()] ?? "to_pay";
+}
+/**
+* Traduit une `Invoice` Frappe (snake_case) vers `Invoice` (camelCase).
+* // TODO backend: `projectTitle`/`companyName` (libellés d'affichage) non
+* // confirmés dans le doctype `Invoice` — best-effort à partir des champs
+* // liés (`project`, `agency`).
+*/
+function mapInvoice(raw) {
+	const data = camelizeKeys(raw);
+	const status = mapInvoiceStatus(data["status"]);
+	const id = String(data["id"] ?? data["name"] ?? "");
+	return {
+		id,
+		projectTitle: String(data["projectTitle"] ?? data["project"] ?? ""),
+		companyName: String(data["companyName"] ?? data["agency"] ?? ""),
+		amount: Number(data["amount"] ?? data["total"] ?? 0),
+		issuedAt: String(data["issueDate"] ?? data["issuedAt"] ?? ""),
+		dueAt: String(data["dueDate"] ?? data["dueAt"] ?? ""),
+		status,
+		statusLabel: String(data["statusLabel"] ?? STATUS_LABELS[status]),
+		downloadUrl: String(data["downloadUrl"] ?? `http://localhost:8080/api/method/frappe.utils.print_format.download_pdf?doctype=Invoice&name=${encodeURIComponent(id)}`),
+		agency: data["agency"] ?? void 0,
+		project: data["project"] ?? void 0,
+		proposal: data["proposal"] ?? void 0,
+		tax: data["tax"] !== void 0 ? Number(data["tax"]) : void 0,
+		total: data["total"] !== void 0 ? Number(data["total"]) : void 0,
+		commissionRate: data["commissionRate"] !== void 0 ? Number(data["commissionRate"]) : void 0,
+		commissionAmount: data["commissionAmount"] !== void 0 ? Number(data["commissionAmount"]) : void 0,
+		amountDue: data["amountDue"] !== void 0 ? Number(data["amountDue"]) : void 0,
+		paymentDate: data["paymentDate"] ?? void 0,
+		invoiceNumber: data["invoiceNumber"] ?? void 0
+	};
+}
+/**
+* // API CALL : frappeCall("payment.list_invoices", { status: filters?.status })
+*/
+async function getInvoices(filters) {
+	const page = filters.page ?? 1;
+	const pageSize = filters.pageSize ?? 20;
+	const raw = await frappeCall("payment.list_invoices", { status: filters.status && filters.status !== "all" ? filters.status : void 0 });
+	const items = (Array.isArray(raw) ? raw : []).map((item) => mapInvoice(item));
+	return {
+		items,
+		page,
+		pageSize,
+		total: items.length,
+		totalPages: 1
+	};
+}
+/**
+* // Dérivé de `payment.list_invoices` (somme côté client) — pas d'endpoint
+* // "summary" dédié confirmé.
+*/
+async function getInvoicesSummary() {
+	const raw = await frappeCall("payment.list_invoices", {});
+	return (Array.isArray(raw) ? raw : []).map((item) => mapInvoice(item)).reduce((summary, invoice) => {
+		if (invoice.status === "paid") summary.totalPaid += invoice.amount;
+		else summary.pendingAmount += invoice.amount;
+		return summary;
+	}, {
+		totalPaid: 0,
+		pendingAmount: 0
+	});
+}
+/**
+* Téléchargement PDF d'une facture via l'utilitaire d'impression Frappe
+* standard (`frappe.utils.print_format.download_pdf`, hors préfixe
+* `platform_core.platform_core.api.` — c'est un utilitaire Frappe générique,
+* pas un endpoint de l'API métier). L'URL est identique à celle déjà
+* construite dans `mapInvoice::downloadUrl` ci-dessus — confirmée correcte,
+* pas de gap backend restant ici.
+*/
+async function downloadInvoice(id) {
+	const url = `${GATEWAY_URL}/api/method/frappe.utils.print_format.download_pdf?doctype=Invoice&name=${encodeURIComponent(id)}`;
+	return fetchBlob(url);
+}
+var useInvoicesStore = create((set) => ({
+	invoices: [],
+	totalPaid: null,
+	pendingAmount: null,
+	isLoading: false,
+	error: null,
+	setInvoices: (invoices) => set({ invoices }),
+	setSummary: ({ totalPaid, pendingAmount }) => set({
+		totalPaid,
+		pendingAmount
+	}),
+	setLoading: (isLoading) => set({ isLoading }),
+	setError: (error) => set({ error }),
+	reset: () => set({
+		invoices: [],
+		totalPaid: null,
+		pendingAmount: null,
+		error: null
+	})
+}));
+/** Facturation (Agence) — factures émises / reçues, filtres, téléchargement. */
+var TABS = [
+	{
+		value: "issued",
+		label: "Émises"
+	},
+	{
+		value: "received",
+		label: "Reçues"
+	},
+	{
+		value: "paid",
+		label: "Payées"
+	},
+	{
+		value: "late",
+		label: "En retard"
+	}
+];
+function buildColumns(onDownload, downloadingId) {
+	return [
+		{
+			key: "invoice",
+			header: "Facture",
+			width: "minmax(0,2.2fr)",
+			render: (invoice) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex min-w-0 items-start gap-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileText, {
+					className: "mt-0.5 h-[18px] w-[18px] shrink-0",
+					strokeWidth: 1.6
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "min-w-0",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "truncate text-[13.5px] font-bold",
+						children: invoice.projectTitle
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "truncate text-[13px] text-muted-foreground",
+						children: invoice.companyName
+					})]
+				})]
+			})
+		},
+		{
+			key: "amount",
+			header: "Montant",
+			render: (invoice) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "truncate text-[13px] font-semibold",
+				children: invoice.amount
+			})
+		},
+		{
+			key: "issuedAt",
+			header: "Émise le",
+			render: (invoice) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "truncate text-[13px] text-muted-foreground",
+				children: invoice.issuedAt
+			})
+		},
+		{
+			key: "dueAt",
+			header: "Échéance",
+			render: (invoice) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "truncate text-[13px] text-muted-foreground",
+				children: invoice.dueAt
+			})
+		},
+		{
+			key: "status",
+			header: "Statut",
+			render: (invoice) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatusBadge, { label: invoice.statusLabel })
+		},
+		{
+			key: "action",
+			header: "Action",
+			render: (invoice) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+				type: "button",
+				onClick: () => onDownload(invoice),
+				disabled: downloadingId === invoice.id,
+				className: "flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-[13px] font-semibold transition-colors hover:bg-accent disabled:opacity-60",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, {
+					className: "h-3 w-3",
+					strokeWidth: 1.8
+				}), downloadingId === invoice.id ? "Téléchargement..." : "Télécharger"]
+			})
+		}
+	];
+}
+/**
+* Le backend (`payment.list_invoices`) ne distingue pas "émises" vs "reçues"
+* (pas de champ de direction confirmé sur `Invoice`) — seul le statut
+* (paid/to_pay/late) est fiable. Les onglets "Émises"/"Reçues" affichent donc
+* la même liste complète, faute de mieux ; "Payées"/"En retard" filtrent
+* réellement par statut.
+*/
+function filterByTab(invoices, tab) {
+	if (tab === "paid") return invoices.filter((invoice) => invoice.status === "paid");
+	if (tab === "late") return invoices.filter((invoice) => invoice.status === "late");
+	return invoices;
+}
+function AgencyInvoicingPage() {
+	const [page] = (0, import_react.useState)(1);
+	const [query, setQuery] = (0, import_react.useState)("");
+	const [activeTab, setActiveTab] = (0, import_react.useState)("issued");
+	const [downloadingId, setDownloadingId] = (0, import_react.useState)(null);
+	const storeInvoices = useInvoicesStore((state) => state.invoices);
+	const setStoreInvoices = useInvoicesStore((state) => state.setInvoices);
+	const setStoreSummary = useInvoicesStore((state) => state.setSummary);
+	const setStoreLoading = useInvoicesStore((state) => state.setLoading);
+	const totalPaidStore = useInvoicesStore((state) => state.totalPaid);
+	const invoicesQuery = useQuery({
+		queryKey: [
+			"agency",
+			"invoices",
+			"all"
+		],
+		queryFn: () => getInvoices({
+			status: "all",
+			page,
+			pageSize: 100
+		})
+	});
+	const summaryQuery = useQuery({
+		queryKey: [
+			"agency",
+			"invoices",
+			"summary"
+		],
+		queryFn: getInvoicesSummary
+	});
+	(0, import_react.useEffect)(() => {
+		setStoreLoading(invoicesQuery.isLoading);
+		if (invoicesQuery.data) setStoreInvoices(invoicesQuery.data.items);
+	}, [invoicesQuery.data, invoicesQuery.isLoading]);
+	(0, import_react.useEffect)(() => {
+		if (summaryQuery.data) setStoreSummary(summaryQuery.data);
+	}, [summaryQuery.data]);
+	const isLoading = invoicesQuery.isLoading;
+	const isSummaryLoading = summaryQuery.isLoading;
+	const tabFiltered = filterByTab(storeInvoices, activeTab);
+	const invoices = query.trim() ? tabFiltered.filter((invoice) => `${invoice.projectTitle} ${invoice.companyName}`.toLowerCase().includes(query.trim().toLowerCase())) : tabFiltered;
+	const counts = {
+		issued: storeInvoices.length,
+		received: storeInvoices.length,
+		paid: storeInvoices.filter((invoice) => invoice.status === "paid").length,
+		late: storeInvoices.filter((invoice) => invoice.status === "late").length
+	};
+	const totalLate = storeInvoices.filter((invoice) => invoice.status === "late").reduce((sum, invoice) => sum + invoice.amount, 0);
+	const totalIssued = storeInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+	const summary = {
+		totalIssued,
+		totalReceived: totalIssued,
+		totalPaid: totalPaidStore,
+		totalLate
+	};
+	async function handleDownload(invoice) {
+		setDownloadingId(invoice.id);
+		try {
+			const blob = await downloadInvoice(invoice.id);
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = invoice.invoiceNumber ?? invoice.id;
+			link.click();
+			URL.revokeObjectURL(url);
+		} catch (error) {
+			toast(error instanceof ApiError ? error.message : "Téléchargement impossible.");
+		} finally {
+			setDownloadingId(null);
+		}
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DashboardShell, {
+		role: "agency",
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "mx-auto max-w-[1080px]",
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+					className: "text-[24px] font-bold tracking-tight",
+					children: "Facturation"
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "mt-1 text-[14px] text-muted-foreground",
+					children: "Suivez vos paiements et téléchargez vos factures."
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("section", {
+					className: "mt-7",
+					children: isSummaryLoading ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatSkeleton, { count: 4 }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(StatGrid, { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatCard, {
+							icon: FileText,
+							label: "Total émis",
+							value: summary.totalIssued === null ? "—" : String(summary.totalIssued)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatCard, {
+							icon: FileText,
+							label: "Total reçu",
+							value: summary.totalReceived === null ? "—" : String(summary.totalReceived)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatCard, {
+							icon: FileText,
+							label: "Total payé",
+							value: summary.totalPaid === null ? "—" : String(summary.totalPaid)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatCard, {
+							icon: FileText,
+							label: "En retard",
+							value: summary.totalLate === null ? "—" : String(summary.totalLate)
+						})
+					] })
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "mt-7",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SearchInput, {
+						value: query,
+						onChange: setQuery,
+						placeholder: "Rechercher une facture..."
+					})
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "mt-6",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StatusTabs, {
+						tabs: TABS,
+						value: activeTab,
+						onChange: setActiveTab,
+						counts
+					})
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilterSelect, {
+							label: "Statut",
+							placeholder: "Tous les statuts"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilterSelect, {
+							label: "Période",
+							placeholder: "Toutes les périodes"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilterSelect, {
+							label: "Client",
+							placeholder: "Tous les clients"
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "mt-8 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "truncate text-[14px] font-semibold",
+						children: [counts[activeTab] ?? 0, " factures"]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						onClick: () => uiAction("Trier par : Plus récentes"),
+						type: "button",
+						className: "flex shrink-0 items-center gap-1.5 text-[13.5px] text-muted-foreground transition-colors hover:text-foreground",
+						children: ["Trier par : Plus récentes", /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, {
+							className: "h-3.5 w-3.5",
+							strokeWidth: 1.8
+						})]
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "mt-4",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DataTable, {
+						columns: buildColumns(handleDownload, downloadingId),
+						rows: invoices,
+						isLoading
+					})
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ListPagination, {
+					page,
+					totalPages: 1
+				})
+			]
+		})
+	});
+}
+//#endregion
+export { AgencyInvoicingPage as component };

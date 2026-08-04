@@ -1,0 +1,105 @@
+import { a as frappeCall, o as restCall, r as camelizeKeys } from "./http-DhyEQgDt.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/prospection.service-CYBhF9LF.js
+var TEMPERATURE_LABELS = {
+	hot: "Chaud",
+	warm: "Tiède",
+	cold: "Froid"
+};
+function mapTemperature(raw) {
+	const value = String(raw ?? "").trim().toLowerCase();
+	if (value === "hot" || value === "chaud") return "hot";
+	if (value === "warm" || value === "tiède" || value === "tiede") return "warm";
+	return "cold";
+}
+function mapLead(raw) {
+	const data = camelizeKeys(raw);
+	const companyName = String(data["companyName"] ?? "");
+	const temperature = mapTemperature(data["classification"] ?? data["temperature"]);
+	return {
+		id: String(data["id"] ?? ""),
+		initials: String(data["initials"] ?? companyName.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("")),
+		companyName,
+		location: String(data["location"] ?? ""),
+		ipAddress: String(data["ipAddress"] ?? ""),
+		actions: Array.isArray(data["actions"]) ? data["actions"] : [],
+		temperature,
+		temperatureLabel: String(data["temperatureLabel"] ?? TEMPERATURE_LABELS[temperature]),
+		score: Number(data["score"] ?? 0)
+	};
+}
+/**
+* // API CALL : restCall('prospection', '/leads', { method: 'GET', query: { classification, from, to } })
+* // TODO backend/frontend: la signature actuelle (`page`/`pageSize`/`temperature`)
+* // ne couvre pas les paramètres `from`/`to` (plage de dates) documentés côté
+* // backend — non exposés par l'appelant actuel, à ajouter si un filtre par
+* // date est requis. Les compteurs par température sont dérivés côté client
+* // (pas de `counters` confirmé dans la réponse brute).
+*/
+async function getLeads(params) {
+	const raw = await restCall("prospection", "/leads", {
+		method: "GET",
+		query: {
+			classification: params?.temperature,
+			page: params?.page,
+			page_size: params?.pageSize
+		}
+	});
+	const data = camelizeKeys(raw);
+	const items = (Array.isArray(raw) ? raw : data["leads"] ?? data["items"] ?? data["results"] ?? []).map((item) => mapLead(item));
+	return {
+		items,
+		counters: {
+			hot: items.filter((item) => item.temperature === "hot").length,
+			warm: items.filter((item) => item.temperature === "warm").length,
+			cold: items.filter((item) => item.temperature === "cold").length,
+			hotDelta: 0,
+			warmDelta: 0,
+			coldDelta: 0
+		},
+		hasMore: Boolean(data["hasMore"] ?? false)
+	};
+}
+/**
+* // API CALL : restCall('prospection', `/leads/${leadId}/generate-email`, { method: 'POST' })
+*/
+async function generateProspectionEmail(leadId) {
+	const raw = await restCall("prospection", `/leads/${leadId}/generate-email`, { method: "POST" });
+	const data = camelizeKeys(raw);
+	const draft = data["draft"] ?? data;
+	return {
+		subject: String(draft["subject"] ?? ""),
+		body: String(draft["body"] ?? "")
+	};
+}
+/**
+* // API CALL : restCall('prospection', `/leads/${leadId}/send-email`, { method: 'POST', body: { subject, body } })
+* Envoie l'e-mail de prospection généré (ou édité) par l'agence à un lead.
+* Endpoint microservice ajouté par un autre agent en parallèle sur
+* `prospection-service` (non vérifiable depuis ce workspace) — voir consigne.
+*/
+async function sendProspectionEmail(leadId, payload) {
+	const raw = await restCall("prospection", `/leads/${leadId}/send-email`, {
+		method: "POST",
+		body: payload
+	});
+	const data = camelizeKeys(raw);
+	return { sent: Boolean(data["sent"] ?? true) };
+}
+/**
+* // TODO backend: pas d'endpoint GET/PUT "settings" dédié côté
+* // `prospection-service`. Approximation en lecture via
+* // `frappeCall("prospection.get_scoring_rules")` (règles de scoring, côté
+* // `platform_core`) — pas d'équivalent PUT identifié pour la sauvegarde
+* // (`updateProspectionSettings` n'existe d'ailleurs pas dans ce service).
+*/
+async function getProspectionSettings() {
+	const raw = await frappeCall("prospection.get_scoring_rules", {});
+	const data = camelizeKeys(raw);
+	const scoring = data["scoring"] ?? data;
+	return { scoring: {
+		hotMin: Number(scoring["hotMin"] ?? 70),
+		warmMin: Number(scoring["warmMin"] ?? 40)
+	} };
+}
+//#endregion
+export { sendProspectionEmail as i, getLeads as n, getProspectionSettings as r, generateProspectionEmail as t };

@@ -1,0 +1,157 @@
+import { a as frappeCall, r as camelizeKeys } from "./http-DhyEQgDt.mjs";
+import { m as mapProject } from "./EmptyState-tYTEkNIz.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/agency-projects.service-G52u-XRU.js
+/**
+* // API CALL : frappeCall("opportunity.list_opportunities", { tab: "Gagnées", ...filters })
+* // Les projets "en cours" côté agence sont modélisés comme des opportunités
+* // au statut Gagnées/En cours (pas de doctype/endpoint "AgencyProject" séparé).
+* // `query`/`client`/`period`/`sort` sont désormais des paramètres confirmés de
+* // `opportunity.list_opportunities` (en plus de budget_min/budget_max/location/
+* // sub_category/need_type) — transmis tels quels.
+* // TODO backend: chaque opportunité référence un projet (`project`) mais on ne
+* // sait pas si la réponse embarque l'objet Project complet ou juste son id —
+* // on tente d'abord `item.project` s'il ressemble à un objet, sinon on mappe
+* // l'opportunité elle-même comme un Project (perte probable de champs).
+*/
+async function getAgencyProjects(filters) {
+	const page = filters?.page ?? 1;
+	const pageSize = filters?.pageSize ?? 20;
+	const raw = await frappeCall("opportunity.list_opportunities", {
+		tab: "Gagnées",
+		query: filters?.query,
+		status: filters?.status,
+		client: filters?.client,
+		period: filters?.period,
+		sort: filters?.sort,
+		page,
+		page_size: pageSize
+	});
+	const data = camelizeKeys(raw);
+	const items = (Array.isArray(raw) ? raw : data["results"] ?? data["items"] ?? []).map((entry) => {
+		const camelized = camelizeKeys(entry);
+		const nestedProject = camelized["project"];
+		return mapProject(nestedProject !== null && typeof nestedProject === "object" ? nestedProject : camelized);
+	});
+	const counts = data["counts"] ?? {};
+	return {
+		items,
+		page,
+		pageSize,
+		total: items.length,
+		totalPages: 1,
+		counts
+	};
+}
+/**
+* Traduit un dossier `ProjectSuspension` (`opportunity.list_suspensions`,
+* champs `id/project_title/client_name/reason/category/status/status_label/
+* opened_at/moderator`) vers `SuspensionCase`. `category` backend est en
+* français ("Suspension amiable" / "Litige") — traduit vers l'union
+* `"amicable" | "dispute"` utilisée par le frontend.
+*/
+function mapSuspensionCase(raw) {
+	const data = camelizeKeys(raw);
+	const category = String(data["category"] ?? "").toLowerCase().includes("litige") ? "dispute" : "amicable";
+	return {
+		id: String(data["id"] ?? data["name"] ?? ""),
+		projectTitle: String(data["projectTitle"] ?? ""),
+		clientName: String(data["clientName"] ?? ""),
+		reason: String(data["reason"] ?? ""),
+		category,
+		status: String(data["status"] ?? ""),
+		statusLabel: String(data["statusLabel"] ?? data["status"] ?? ""),
+		openedAt: String(data["openedAt"] ?? ""),
+		moderator: data["moderator"] ?? null
+	};
+}
+/**
+* Statuts `ProjectSuspension` considérés "clôturés" côté UI (onglet
+* "Clôturés") — le doctype n'a pas de statut `Closed` littéral, seulement des
+* issues terminales (cf. `projectsuspension.json` : Requested/Validated sont
+* en cours, les 4 autres sont terminales).
+*/
+var CLOSED_SUSPENSION_STATUSES = /* @__PURE__ */ new Set([
+	"Refused",
+	"Resumed",
+	"Founded",
+	"Not Founded"
+]);
+function isClosedSuspensionStatus(status) {
+	return CLOSED_SUSPENSION_STATUSES.has(status);
+}
+/**
+* // API CALL : frappeCall("opportunity.list_suspensions")
+* `opportunity.list_suspensions(tab?)` existe côté backend mais son `tab`
+* filtre sur le champ `status` brut (Requested/Validated/Refused/...), pas sur
+* le regroupement "amicable/dispute/closed" utilisé par les onglets de
+* `agence.suspension.tsx` — on récupère donc la liste complète (sans `tab`) et
+* on filtre/pagine/compte côté client, comme pour `notifications.service.ts`.
+* `period`/`sort` ne sont pas des paramètres de cet endpoint : tri par défaut
+* (plus récent en premier) appliqué côté client, `period` ignoré (aucun champ
+* de filtre période reçu de l'écran suspension actuellement).
+*/
+async function getSuspensionCases(filters) {
+	const page = filters?.page ?? 1;
+	const pageSize = filters?.pageSize ?? 20;
+	const raw = await frappeCall("opportunity.list_suspensions", {});
+	const data = camelizeKeys(raw);
+	const allCases = (Array.isArray(raw) ? raw : data["results"] ?? data["items"] ?? []).map((entry) => mapSuspensionCase(entry));
+	const counts = {
+		all: allCases.length,
+		amicable: allCases.filter((item) => item.category === "amicable").length,
+		dispute: allCases.filter((item) => item.category === "dispute").length,
+		closed: allCases.filter((item) => isClosedSuspensionStatus(item.status)).length
+	};
+	let items = allCases;
+	const activeTab = filters?.status;
+	if (activeTab && activeTab !== "all") items = activeTab === "closed" ? items.filter((item) => isClosedSuspensionStatus(item.status)) : items.filter((item) => item.category === activeTab);
+	if (filters?.query) {
+		const normalizedQuery = filters.query.trim().toLowerCase();
+		items = items.filter((item) => `${item.projectTitle} ${item.clientName} ${item.reason}`.toLowerCase().includes(normalizedQuery));
+	}
+	items = [...items].sort((a, b) => a.openedAt < b.openedAt ? 1 : -1);
+	const total = items.length;
+	const totalPages = Math.max(1, Math.ceil(total / pageSize));
+	const start = (page - 1) * pageSize;
+	return {
+		items: items.slice(start, start + pageSize),
+		page,
+		pageSize,
+		total,
+		totalPages,
+		counts
+	};
+}
+/**
+* // API CALL : frappeCall("opportunity.get_suspension_history", { suspension: id })
+*/
+async function getSuspensionHistory(id) {
+	if (!id) return [];
+	const raw = await frappeCall("opportunity.get_suspension_history", { suspension: id });
+	return (Array.isArray(raw) ? raw : []).map((entry) => {
+		const data = camelizeKeys(entry);
+		return {
+			id: String(data["id"] ?? data["name"] ?? ""),
+			date: String(data["date"] ?? ""),
+			title: String(data["title"] ?? ""),
+			description: String(data["description"] ?? "")
+		};
+	});
+}
+/**
+* // API CALL : frappeCall("opportunity.respond_to_suspension", { suspension: id, message, evidence_ids })
+*/
+async function respondToSuspension(id, payload) {
+	const raw = await frappeCall("opportunity.respond_to_suspension", {
+		suspension: id,
+		message: payload.message,
+		evidence_ids: payload.evidenceIds
+	});
+	const data = camelizeKeys(raw);
+	return {
+		id: String(data["id"] ?? id),
+		status: String(data["status"] ?? "responded")
+	};
+}
+//#endregion
+export { respondToSuspension as i, getSuspensionCases as n, getSuspensionHistory as r, getAgencyProjects as t };

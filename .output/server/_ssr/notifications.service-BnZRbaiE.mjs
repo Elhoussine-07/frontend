@@ -1,0 +1,66 @@
+import { a as frappeCall, r as camelizeKeys } from "./http-DhyEQgDt.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/notifications.service-BnZRbaiE.js
+/** Service notifications. */
+/**
+* Traduit une `Notification` Frappe (snake_case) vers `Notification` (camelCase).
+*/
+function mapNotification(raw) {
+	const data = camelizeKeys(raw);
+	return {
+		id: String(data["id"] ?? data["name"] ?? ""),
+		title: String(data["title"] ?? ""),
+		description: String(data["body"] ?? data["description"] ?? ""),
+		createdAt: String(data["creation"] ?? data["createdAt"] ?? ""),
+		read: Boolean(data["isRead"] ?? data["read"] ?? false),
+		recipient: data["recipient"] ?? void 0,
+		category: data["category"] ?? void 0,
+		link: data["link"] ?? void 0,
+		referenceDoctype: data["referenceDoctype"] ?? void 0,
+		referenceName: data["referenceName"] ?? void 0,
+		agencyContext: data["agencyContext"] ?? void 0,
+		channel: data["channel"] ?? void 0,
+		actionRequired: data["actionRequired"] ?? void 0,
+		readOn: data["readOn"] ?? void 0,
+		isArchived: data["isArchived"] ?? void 0
+	};
+}
+/**
+* // API CALL : frappeCall("notification.list_active", { agency_context })
+* // (notifications actives ; `notification.list_history` existe côté backend
+* // pour l'historique complet mais n'est pas branché ici faute d'appelant
+* // identifié demandant explicitement l'historique — TODO backend/frontend si
+* // un écran "historique des notifications" est ajouté).
+*/
+async function getNotifications(params) {
+	const page = params?.page ?? 1;
+	const pageSize = params?.pageSize ?? 20;
+	const raw = await frappeCall("notification.list_active", {});
+	let items = (Array.isArray(raw) ? raw : []).map((item) => mapNotification(item));
+	if (params?.unreadOnly) items = items.filter((item) => !item.read);
+	return {
+		items,
+		page,
+		pageSize,
+		total: items.length,
+		totalPages: 1
+	};
+}
+/**
+* // API CALL : frappeCall("notification.mark_read", { notification: id })
+*/
+async function markAsRead(id) {
+	const raw = await frappeCall("notification.mark_read", { notification: id });
+	const data = camelizeKeys(raw);
+	return { read: Boolean(data["read"] ?? data["isRead"] ?? true) };
+}
+/**
+* // API CALL : frappeCall("notification.mark_all_active_read", { agency_context })
+* `agency_context` est omis (undefined) côté client — pas de notion d'agence
+* active dans ce contexte (voir `profile.service.ts::getAgencyProfile` pour
+* la même approximation côté agence).
+*/
+async function markAllAsRead() {
+	await frappeCall("notification.mark_all_active_read", { agency_context: void 0 });
+}
+//#endregion
+export { markAllAsRead as n, markAsRead as r, getNotifications as t };

@@ -1,0 +1,17 @@
+import { n as toast } from "../_libs/sonner.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/ui-actions-Crijx9Um.js
+/**
+* Point de branchement unique pour toutes les actions d'interface
+* qui ne sont pas encore reliées au backend.
+*
+* Chaque bouton de l'application appelle `uiAction("<libellé>")`.
+* Il suffit de remplacer l'appel par le service correspondant
+* (voir `src/services/*.service.ts`) le jour du branchement API.
+*
+* // API CALL: remplacer par le service métier associé au libellé.
+*/
+function uiAction(label) {
+	toast(label, { description: "Action prête — en attente du branchement API." });
+}
+//#endregion
+export { uiAction as t };

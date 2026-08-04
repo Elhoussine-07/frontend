@@ -1,0 +1,1 @@
+import{o as e}from"./useStore-B9WcefOa.js";import{t}from"./SmartBriefing-B_uwetAo.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as component};

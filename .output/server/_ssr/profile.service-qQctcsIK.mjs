@@ -1,0 +1,212 @@
+import { t as useAuthStore } from "./auth.store-ntL1qCiT.mjs";
+import { a as frappeCall, r as camelizeKeys } from "./http-DhyEQgDt.mjs";
+import { m as mapProject } from "./EmptyState-tYTEkNIz.mjs";
+import { n as useAgencyStore } from "./DashboardShell-BexnO34z.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/profile.service-qQctcsIK.js
+/**
+* Services profil, collaborations, paramètres, tableau de bord.
+*
+* NOTE : `getCollaborations`/`submitCollaborationReview` sont un doublon
+* volontaire de `collaborations.service.ts` (voir consigne) — ils pointent vers
+* les mêmes appels réseau (`client.list_collaborations` / `review.submit_agency_review`),
+* via `mapCollaboration` partagé.
+*/
+function trustScoreLabelFor(score) {
+	if (score >= 80) return "Excellent";
+	if (score >= 60) return "Bon";
+	if (score >= 40) return "Moyen";
+	return "À améliorer";
+}
+/**
+* Traduit `client.get_profile` (snake_case) vers `ClientProfile` (camelCase).
+* // TODO backend: `trustScoreFactors`/`missingFields`/`identityVerifiedAt` n'ont
+* // pas de source confirmée dans `client.get_profile` — laissés vides/dérivés
+* // en best-effort (label calculé côté client à partir du score).
+*/
+function mapClientProfile(raw) {
+	const data = camelizeKeys(raw);
+	const trustScore = Number(data["trustScore"] ?? 0);
+	return {
+		id: String(data["id"] ?? data["name"] ?? ""),
+		contactFirstName: String(data["firstName"] ?? data["contactFirstName"] ?? ""),
+		contactLastName: String(data["lastName"] ?? data["contactLastName"] ?? ""),
+		companyName: String(data["companyName"] ?? ""),
+		activitySector: String(data["sector"] ?? data["activitySector"] ?? ""),
+		country: String(data["country"] ?? ""),
+		legalIdType: String(data["legalIdLabel"] ?? data["legalIdType"] ?? ""),
+		legalIdValue: String(data["legalId"] ?? data["legalIdValue"] ?? ""),
+		identityVerified: Boolean(data["legalIdVerified"] ?? data["identityVerified"] ?? false),
+		identityVerifiedAt: data["identityVerifiedAt"] ?? null,
+		trustScore,
+		trustScoreLabel: String(data["trustScoreLabel"] ?? trustScoreLabelFor(trustScore)),
+		trustScoreFactors: Array.isArray(data["trustScoreFactors"]) ? data["trustScoreFactors"] : [],
+		completionPercent: Number(data["profileCompletion"] ?? data["completionPercent"] ?? 0),
+		missingFields: Array.isArray(data["missingFields"]) ? data["missingFields"] : [],
+		updatedAt: String(data["modified"] ?? data["updatedAt"] ?? ""),
+		phone: data["phone"] ?? void 0,
+		phoneVerified: data["phoneVerified"] ?? void 0,
+		logo: data["logo"] ?? void 0,
+		projectsPublishedCount: data["projectsPublishedCount"] !== void 0 ? Number(data["projectsPublishedCount"]) : void 0,
+		responseRate: data["responseRate"] !== void 0 ? Number(data["responseRate"]) : void 0,
+		accountSeniority: data["accountSeniority"] ?? void 0
+	};
+}
+/**
+* Traduit `agency.get_profile` (snake_case) vers `AgencyProfile` (camelCase).
+* // TODO backend: `phoneCountryCode`/`verificationCode`/`address` n'ont pas de
+* // champ backend confirmé — laissés vides (usage frontend uniquement pour
+* // `verificationCode`, propre au flux d'inscription).
+*/
+function mapAgencyProfile(raw) {
+	const data = camelizeKeys(raw);
+	return {
+		id: String(data["id"] ?? data["name"] ?? ""),
+		name: String(data["agencyName"] ?? data["name"] ?? ""),
+		description: String(data["description"] ?? ""),
+		foundedYear: String(data["yearFounded"] ?? data["foundedYear"] ?? ""),
+		teamSize: String(data["teamSize"] ?? ""),
+		website: String(data["website"] ?? ""),
+		languages: Array.isArray(data["languages"]) ? data["languages"] : [],
+		remoteWork: Boolean(data["remoteWork"] ?? false),
+		location: String(data["location"] ?? ""),
+		legalIdValue: String(data["legalId"] ?? data["legalIdValue"] ?? ""),
+		legalIdValid: Boolean(data["legalIdVerified"] ?? data["legalIdValid"] ?? false),
+		techStack: Array.isArray(data["techStack"]) ? data["techStack"] : [],
+		skills: Array.isArray(data["skills"]) ? data["skills"] : [],
+		phoneCountryCode: String(data["phoneCountryCode"] ?? ""),
+		phone: String(data["phone"] ?? ""),
+		email: String(data["email"] ?? ""),
+		verificationCode: String(data["verificationCode"] ?? ""),
+		address: String(data["address"] ?? data["location"] ?? ""),
+		logo: data["logo"] ?? void 0,
+		slogan: data["slogan"] ?? void 0,
+		coverImage: data["coverImage"] ?? void 0,
+		coverage: Array.isArray(data["coverage"]) ? data["coverage"] : void 0,
+		annualRevenue: data["annualRevenue"] !== void 0 ? Number(data["annualRevenue"]) : void 0,
+		country: data["country"] ?? void 0,
+		emailVerified: data["emailVerified"] ?? void 0,
+		socialLinks: data["socialLinks"] ?? void 0,
+		rating: data["rating"] !== void 0 ? Number(data["rating"]) : void 0,
+		pqiScore: data["pqiScore"] !== void 0 ? Number(data["pqiScore"]) : void 0,
+		profileCompletion: data["profileCompletion"] !== void 0 ? Number(data["profileCompletion"]) : void 0,
+		reviewsCount: data["reviewsCount"] !== void 0 ? Number(data["reviewsCount"]) : void 0,
+		services: Array.isArray(data["services"]) ? data["services"] : void 0,
+		portfolio: Array.isArray(data["portfolio"]) ? data["portfolio"] : void 0,
+		team: Array.isArray(data["team"]) ? data["team"] : void 0,
+		certifications: Array.isArray(data["certifications"]) ? data["certifications"] : void 0
+	};
+}
+/**
+* // API CALL : frappeCall("client.get_profile")
+*/
+async function getClientProfile() {
+	return mapClientProfile(await frappeCall("client.get_profile", {}));
+}
+/**
+* // API CALL : frappeCall("client.update_profile", payload)
+*/
+async function updateClientProfile(payload) {
+	return mapClientProfile(await frappeCall("client.update_profile", payload));
+}
+/**
+* // API CALL : frappeCall("agency.get_profile", { agency: <agence active> })
+* L'agence active est portée par `agency.store.ts` (`activeAgencyId`, alimenté
+* par le sélecteur d'agence de `DashboardShell.tsx` via `agencies.service.ts::getMyAgencies`).
+* Repli sur l'id utilisateur si aucune agence active n'est encore connue
+* (premier chargement avant que le sélecteur n'ait résolu la liste des agences).
+*/
+async function getAgencyProfile() {
+	const agencyId = useAgencyStore.getState().activeAgencyId ?? useAuthStore.getState().user?.id;
+	return mapAgencyProfile(await frappeCall("agency.get_profile", { agency: agencyId }));
+}
+/**
+* // API CALL : frappeCall("agency.update_profile", payload)
+*/
+async function updateAgencyProfile(payload) {
+	return mapAgencyProfile(await frappeCall("agency.update_profile", payload));
+}
+/**
+* // API CALL : frappeCall("client.get_dashboard")
+* // Réponse : { trustScore, projectsPublishedCount, responseRate,
+* // activeProjectsCount, collaborationsCount, recentProjects }.
+* // TODO backend: pas de "delta" (variation) exposé par ce endpoint — laissés
+* // à "0%" (aucune source connue).
+*/
+async function getClientDashboard() {
+	const raw = await frappeCall("client.get_dashboard", {});
+	const data = camelizeKeys(raw);
+	const trustScore = Number(data["trustScore"] ?? 0);
+	const recentProjectsList = Array.isArray(data["recentProjects"]) ? data["recentProjects"] : [];
+	return {
+		trustScore: {
+			value: trustScore,
+			label: trustScoreLabelFor(trustScore)
+		},
+		publishedProjects: {
+			value: Number(data["projectsPublishedCount"] ?? 0),
+			delta: "0%"
+		},
+		responseRate: {
+			value: Number(data["responseRate"] ?? 0),
+			delta: "0%"
+		},
+		activeCollaborations: { value: Number(data["collaborationsCount"] ?? data["activeProjectsCount"] ?? 0) },
+		recentProjects: recentProjectsList.map((item) => mapProject(item))
+	};
+}
+/**
+* // API CALL : frappeCall("settings.get_settings")
+*/
+async function getSettings() {
+	const raw = await frappeCall("settings.get_settings", {});
+	const data = camelizeKeys(raw);
+	const theme = String(data["theme"] ?? "system");
+	return {
+		theme: theme === "light" || theme === "dark" ? theme : "system",
+		language: String(data["language"] ?? "fr"),
+		font: String(data["font"] ?? "default"),
+		textSize: Number(data["textSize"] ?? 14),
+		twoFactorEnabled: Boolean(data["twoFactorEnabled"] ?? false),
+		emailNotifications: Boolean(data["emailNotifications"] ?? true),
+		pushNotifications: Boolean(data["pushNotifications"] ?? true)
+	};
+}
+/**
+* // API CALL : frappeCall("settings.update_settings", payload)
+*/
+async function updateSettings(payload) {
+	const raw = await frappeCall("settings.update_settings", payload);
+	const data = camelizeKeys(raw);
+	const theme = String(data["theme"] ?? payload.theme ?? "system");
+	return {
+		theme: theme === "light" || theme === "dark" ? theme : "system",
+		language: String(data["language"] ?? payload.language ?? "fr"),
+		font: String(data["font"] ?? payload.font ?? "default"),
+		textSize: Number(data["textSize"] ?? payload.textSize ?? 14),
+		twoFactorEnabled: Boolean(data["twoFactorEnabled"] ?? payload.twoFactorEnabled ?? false),
+		emailNotifications: Boolean(data["emailNotifications"] ?? payload.emailNotifications ?? true),
+		pushNotifications: Boolean(data["pushNotifications"] ?? payload.pushNotifications ?? true)
+	};
+}
+/**
+* Enregistre un moyen de paiement agence (formulaire de facturation, écran
+* "Facturation" côté agence — `agence.facturation.tsx`, hors périmètre de cet
+* agent, qui n'a qu'à importer cette fonction).
+*
+* // API CALL : frappeCall("payment.register_payment_method", payload)
+* // Endpoint déjà existant côté backend (pas un TODO backend), simplement
+* // jamais exposé côté service avant cette passe. `payload` est transmis tel
+* // quel (forme exacte laissée à l'appelant / au formulaire agence — voir
+* // CDC §2.3.x facturation pour les champs attendus, ex. type de moyen de
+* // paiement, IBAN/carte, titulaire...).
+*
+* Signature :
+*   registerAgencyPaymentMethod(payload: Record<string, unknown>): Promise<{ registered: boolean }>
+*/
+async function registerAgencyPaymentMethod(payload) {
+	const raw = await frappeCall("payment.register_payment_method", payload);
+	const data = camelizeKeys(raw);
+	return { registered: Boolean(data["registered"] ?? true) };
+}
+//#endregion
+export { registerAgencyPaymentMethod as a, updateSettings as c, getSettings as i, getClientDashboard as n, updateAgencyProfile as o, getClientProfile as r, updateClientProfile as s, getAgencyProfile as t };
